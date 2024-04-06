@@ -130,6 +130,7 @@ type privateKey struct {
 	p      *big.Int
 	q      *big.Int
 	lambda *big.Int // λ=lcm(p−1, q−1)
+	phiN   *big.Int // (p-1) * (q-1)
 	mu     *big.Int // μ=(L(g^λ mod n^2))^-1 mod n
 }
 
@@ -156,6 +157,10 @@ func (p *Paillier) GetPrivQ() *big.Int {
 
 func (p *Paillier) GetPrivLambda() *big.Int {
 	return new(big.Int).Set(p.privateKey.lambda)
+}
+
+func (p *Paillier) GetPrivPhiN() *big.Int {
+	return new(big.Int).Set(p.privateKey.phiN)
 }
 
 func (p *Paillier) GetPrivMu() *big.Int {
@@ -210,7 +215,7 @@ func NewPaillierWithGivenPrimes(p, q *big.Int) (*Paillier, error) {
 
 // Warning: No check the size of public key.
 func NewPaillierUnSafe(keySize int, isSafe bool) (*Paillier, error) {
-	p, q, n, lambda, err := getNAndLambda(keySize, isSafe)
+	p, q, n, lambda, phiN, err := getNAndLambda(keySize, isSafe)
 	if err != nil {
 		return nil, err
 	}
@@ -236,6 +241,7 @@ func NewPaillierUnSafe(keySize int, isSafe bool) (*Paillier, error) {
 			p:      p,
 			q:      q,
 			lambda: lambda,
+			phiN:   phiN,
 			mu:     mu,
 		},
 	}, nil
@@ -296,12 +302,13 @@ func (p *Paillier) VerifyMtaProof(bs []byte, curve elliptic.Curve, _ *big.Int, _
 
 // getNAndLambda returns N and lambda.
 // n = pq and lambda = lcm(p-1, q-1)
-func getNAndLambda(keySize int, isSafe bool) (*big.Int, *big.Int, *big.Int, *big.Int, error) {
+// phiN = (p-1)(q-1)
+func getNAndLambda(keySize int, isSafe bool) (*big.Int, *big.Int, *big.Int, *big.Int, *big.Int, error) {
 	pqSize := keySize / 2
 	for i := 0; i < maxGenN; i++ {
 		p, q, err := generatePrime(isSafe, pqSize)
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, err
 		}
 		pMinus1 := new(big.Int).Sub(p, big1)    // p-1
 		qMinus1 := new(big.Int).Sub(q, big1)    // q-1
@@ -311,11 +318,11 @@ func getNAndLambda(keySize int, isSafe bool) (*big.Int, *big.Int, *big.Int, *big
 		if utils.IsRelativePrime(n, m) {
 			lambda, err := utils.Lcm(pMinus1, qMinus1)
 			if err == nil {
-				return p, q, n, lambda, err
+				return p, q, n, lambda, m, err
 			}
 		}
 	}
-	return nil, nil, nil, nil, ErrExceedMaxRetry
+	return nil, nil, nil, nil, nil, ErrExceedMaxRetry
 }
 
 func generatePrime(isSafe bool, primeSize int) (*big.Int, *big.Int, error) {
